@@ -161,6 +161,8 @@ This confirms that Pi-hole is no longer using a public preset upstream resolver 
 
 The query log shows test queries for `doubleclick.net` being blocked. This validates that client traffic is reaching Pi-hole and that blocklist enforcement is working.
 
+In the query log screenshot, the **Allow** and **Deny** buttons are action buttons provided by Pi-hole. They do not mean the displayed query was allowed or denied by that button. Instead, they give the administrator a quick way to manually allowlist or denylist a domain after reviewing the query. The blocked status indicator on the query row is the evidence that the `doubleclick.net` test query was blocked.
+
 ---
 
 ## Unbound Configuration
