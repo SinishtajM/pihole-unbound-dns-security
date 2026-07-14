@@ -1,0 +1,5 @@
+# Interface used by the Pi-hole container.
+PIHOLE_IPV6_INTERFACE=eth0
+
+# Example ULA only. Replace this with the stable IPv6 address assigned to Pi-hole.
+PIHOLE_IPV6_ADDRESS=fd12:3456:789a:1::53/64

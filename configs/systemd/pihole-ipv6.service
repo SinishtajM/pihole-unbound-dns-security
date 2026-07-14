@@ -1,0 +1,13 @@
+[Unit]
+Description=Add stable IPv6 address for Pi-hole DNS
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/default/pihole-ipv6
+ExecStart=/usr/local/sbin/add-pihole-ipv6.sh
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
