@@ -237,7 +237,7 @@ flags included ra
 Testing from multiple systems isolated the behavior to a router-level advanced security feature. After disabling that feature:
 
 - Direct root-server queries returned the authoritative (`aa`) flag without `ra`.
-- UDP and TCP port `53` tests succeeded.
+- The captured direct root-server query returned the expected authoritative response.
 - The A-root `version.bind` identity query returned `ATLAS`.
 - Unbound installation proceeded only after direct root-server access was confirmed.
 
