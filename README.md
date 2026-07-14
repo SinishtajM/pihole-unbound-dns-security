@@ -1,10 +1,11 @@
 # Pi-hole + Unbound DNS Security Project
 
+A portfolio case study documenting a network-wide DNS filtering and recursive-resolution stack built with **Pi-hole** and **Unbound** inside an unprivileged Debian LXC container on Proxmox VE.
+
 ## Table of Contents
 
-- [Project Summary](#project-summary)
-- [Goals](#goals)
-- [Evidence Included](#evidence-included)
+- [Project Overview](#project-overview)
+- [Key Outcomes](#key-outcomes)
 - [Final Architecture](#final-architecture)
 - [Core Components](#core-components)
 - [Technical Artifacts](#technical-artifacts)
@@ -14,8 +15,8 @@
 - [IPv4 and IPv6 DNS Design](#ipv4-and-ipv6-dns-design)
 - [Troubleshooting: DNS Interception](#troubleshooting-dns-interception)
 - [Health Check Script](#health-check-script)
-- [Validation Results](#validation-results)
-- [Security and Hardening Decisions](#security-and-hardening-decisions)
+- [Validation Summary](#validation-summary)
+- [Security and Hardening](#security-and-hardening)
 - [Problems Solved](#problems-solved)
 - [Skills Demonstrated](#skills-demonstrated)
 - [Future Improvements](#future-improvements)
@@ -23,46 +24,31 @@
 
 ---
 
-## Project Summary
+## Project Overview
 
-This project documents the deployment of a local DNS security stack using **Pi-hole** and **Unbound** inside a lightweight, unprivileged Debian LXC container running on Proxmox VE.
+The completed deployment provides:
 
-The final setup provides network-wide DNS filtering, ad/tracker blocking, local DNS visibility, recursive DNS resolution, DNSSEC validation, IPv4 DNS support, IPv6 DNS support, and a custom health-check command for ongoing validation.
+- Network-wide DNS filtering and ad/tracker blocking.
+- Local query visibility through Pi-hole.
+- Recursive DNS resolution through Unbound instead of a public preset resolver.
+- DNSSEC validation for signed domains, including rejection of bogus responses.
+- Direct DNS access for both IPv4 and IPv6 clients.
+- A stable client-facing IPv6 address restored automatically at boot.
+- Repeatable operational validation through a custom `dns-health` command.
 
-The project also includes troubleshooting of DNS interception caused by a router-level advanced security feature. That issue had to be identified and resolved before Unbound could function as a true recursive resolver.
+A major troubleshooting finding was router-level DNS interception. Direct root-server queries initially returned recursion-available responses, which was inconsistent with direct authoritative root-server behavior. The interfering router security feature was identified and disabled before Unbound was placed into service.
 
----
+## Key Outcomes
 
-## Goals
-
-The main goals of this project were:
-
-- Build a lightweight local DNS filtering server.
-- Use Pi-hole for DNS sinkholing, visibility, and ad/tracker blocking.
-- Use Unbound as a local recursive resolver instead of relying on a public upstream DNS provider.
-- Confirm DNSSEC validation for trusted DNS responses.
-- Support both IPv4 and IPv6 DNS clients.
-- Avoid public exposure of the DNS service.
-- Keep the DNS container unprivileged for safer isolation.
-- Create a repeatable health-check command for ongoing operational validation.
-- Document troubleshooting steps and validation evidence for portfolio use.
-
----
-
-## Evidence Included
-
-This case study includes sanitized screenshots showing the working deployment and validation results:
-
-- Proxmox DNS LXC overview.
-- Pi-hole dashboard overview.
-- Pi-hole upstream DNS configuration pointing to Unbound.
-- Pi-hole query log showing a blocked test domain.
-- Windows client DNS settings using Pi-hole for IPv4 and IPv6.
-- DNS health-check output with all checks passing.
-- Root-server test showing direct authoritative DNS responses.
-- Unbound DNSSEC tests showing broken DNSSEC rejection and valid DNSSEC authentication.
-
-Sensitive values such as internal IPs, public IPv6 addresses, full IPv6 prefixes, usernames, client names, host-specific details, and unrelated query log entries have been redacted.
+| Area | Outcome |
+|---|---|
+| Filtering | Pi-hole blocks configured ad and tracker domains for network clients |
+| Resolution | Allowed queries are forwarded locally to Unbound for recursive resolution |
+| DNSSEC | Bogus signed responses are rejected and valid signed responses are authenticated |
+| IPv4 and IPv6 | Clients receive Pi-hole as their DNS server over both protocol families |
+| Isolation | The DNS stack remains inside an unprivileged LXC container |
+| Reproducibility | Sanitized scripts, configurations, installation notes, and validation methods are published |
+| Troubleshooting | Router-level DNS interception was detected through root-server response analysis |
 
 ---
 
@@ -98,13 +84,13 @@ flowchart TD
     AUTH -. DNS response .-> UNBOUND
 ```
 
-The router distributes the Pi-hole IPv4 and IPv6 addresses through the network's client configuration. Client DNS traffic then goes directly to Pi-hole rather than being resolved by a router-based DNS proxy. Pi-hole handles filtering and caching before forwarding allowed queries locally to Unbound.
+The router distributes the Pi-hole DNS addresses to clients, but it does not act as the resolver in this design. Clients send DNS queries directly to Pi-hole. Pi-hole answers blocked or cached queries locally and forwards permitted queries to Unbound on loopback.
 
 ### Proxmox DNS LXC Overview
 
 ![Proxmox DNS LXC overview](screenshots/proxmox-dns-lxc-overview.png)
 
-The DNS service runs in a small unprivileged LXC container. The container uses low CPU and memory while providing network-wide DNS filtering and recursive resolution.
+The DNS stack runs in a lightweight, unprivileged Debian LXC container with no public DNS exposure.
 
 ---
 
@@ -113,36 +99,34 @@ The DNS service runs in a small unprivileged LXC container. The container uses l
 | Component | Role |
 |---|---|
 | Proxmox VE | Hosts the DNS LXC container |
-| Debian LXC | Lightweight, unprivileged Linux container for the DNS stack |
-| Pi-hole | DNS filtering, blocklists, query logging, caching, and web dashboard |
-| Unbound | Local recursive DNS resolver with DNSSEC validation |
+| Debian LXC | Provides lightweight, unprivileged isolation |
+| Pi-hole | Filters DNS queries, maintains blocklists and cache, logs queries, and provides the web dashboard |
+| Unbound | Performs recursive DNS resolution and DNSSEC validation |
 | Router DHCP/DNS settings | Distributes the Pi-hole IPv4 and IPv6 DNS addresses to clients |
-| Windows client | Used to validate IPv4 and IPv6 DNS assignment |
-| [`dns-health`](scripts/dns-health) | Runs repeatable operational and security validation |
+| Windows client | Confirms client-side IPv4 and IPv6 DNS assignment |
+| [`dns-health`](scripts/dns-health) | Automates operational and security validation |
 | [`pihole-ipv6.service`](configs/systemd/pihole-ipv6.service) | Restores the stable client-facing IPv6 address at boot |
 
 ---
 
 ## Technical Artifacts
 
-The repository includes sanitized, parameterized versions of the custom scripts and configuration files used by the working deployment:
+The repository includes sanitized, parameterized versions of the custom files used by the working deployment:
 
 | Artifact | Purpose |
 |---|---|
-| [`scripts/dns-health`](scripts/dns-health) | Validates services, listeners, normal resolution, blocking, DNSSEC, direct root-server access, and Pi-hole-to-Unbound forwarding |
+| [`scripts/dns-health`](scripts/dns-health) | Validates services, listeners, resolution, blocking, DNSSEC, root-server access, and forwarding |
 | [`scripts/add-pihole-ipv6.sh`](scripts/add-pihole-ipv6.sh) | Adds the configured stable IPv6 address to the Pi-hole interface |
 | [`configs/systemd/pihole-ipv6.service`](configs/systemd/pihole-ipv6.service) | Runs the stable-IPv6 helper during system startup |
-| [`configs/systemd/pihole-ipv6.default.example`](configs/systemd/pihole-ipv6.default.example) | Provides public-safe example settings for the IPv6 service |
-| [`configs/systemd/dns-health.default.example`](configs/systemd/dns-health.default.example) | Provides optional settings for the health-check command |
+| [`configs/systemd/pihole-ipv6.default.example`](configs/systemd/pihole-ipv6.default.example) | Supplies public-safe example settings for the IPv6 service |
+| [`configs/systemd/dns-health.default.example`](configs/systemd/dns-health.default.example) | Supplies optional settings for the health-check command |
 | [`configs/unbound/pi-hole.conf`](configs/unbound/pi-hole.conf) | Contains the sanitized Unbound recursive-resolver configuration |
-
-See [Technical Artifacts](docs/technical-artifacts.md) for tested versions, installation paths, deployment commands, IPv6 design notes, and sanitization details.
+| [`docs/technical-artifacts.md`](docs/technical-artifacts.md) | Documents installation paths and deployment commands |
+| [`VALIDATION.md`](VALIDATION.md) | Records tested versions, commands, expected outcomes, and observed results |
 
 ---
 
 ## DNS Resolution Flow
-
-The final DNS flow is:
 
 ```text
 Router / DHCP
@@ -150,7 +134,7 @@ Router / DHCP
 
 Client device
   → sends DNS queries directly to Pi-hole on port 53
-  → Pi-hole checks its cache, local data, and blocklists
+  → Pi-hole checks its cache, local DNS data, and blocklists
   → blocked queries are answered locally by Pi-hole
   → allowed queries are forwarded to Unbound on 127.0.0.1#5335
   → Unbound performs recursive resolution through the DNS hierarchy
@@ -158,297 +142,220 @@ Client device
   → the response returns through Pi-hole to the client
 ```
 
-This design keeps filtering and recursive resolution on the same DNS server while avoiding public upstream DNS providers for normal allowed queries.
-
-The deployment supports IPv6 clients even though Unbound uses IPv4 for its outbound recursive queries. Client-facing DNS transport and Unbound's outbound recursion transport are separate: clients can reach Pi-hole over IPv6, while Pi-hole forwards locally to Unbound over IPv4 loopback.
+Client-facing IPv6 DNS and Unbound's outbound recursion transport are separate. Clients can reach Pi-hole over IPv6 while Pi-hole forwards locally to Unbound over IPv4 loopback.
 
 ---
 
 ## Pi-hole Configuration
 
-Pi-hole provides the filtering and visibility layer of the project.
+Pi-hole provides the filtering and visibility layer:
 
-Key configuration choices:
-
-- Pi-hole listens for client DNS queries on port 53.
-- Pi-hole blocking is enabled.
-- Default blocklists are enabled.
-- Query logging is enabled for local troubleshooting.
-- The upstream DNS server is set to local Unbound.
-- Public upstream DNS providers are unchecked after Unbound validation.
+- Listens for client DNS queries on port `53`.
+- Applies blocklists and local DNS data.
+- Maintains DNS cache and query logs.
+- Forwards permitted queries only to local Unbound at `127.0.0.1#5335`.
+- Does not use a public preset upstream resolver for normal permitted queries.
 
 ### Pi-hole Dashboard Overview
 
 ![Pi-hole dashboard overview](screenshots/pihole-dashboard-overview.png)
 
-The dashboard shows Pi-hole actively handling DNS queries, blocking unwanted domains, and maintaining the enabled blocklist database.
-
 ### Pi-hole Upstream DNS Configuration
 
 ![Pi-hole upstream Unbound configuration](screenshots/pihole-upstream-unbound.png)
 
-Pi-hole is configured to forward allowed queries to local Unbound using:
+The configured custom upstream is:
 
 ```text
 127.0.0.1#5335
 ```
 
-This confirms that Pi-hole is no longer using a public preset upstream resolver for normal allowed DNS queries.
-
 ### Blocked Query Evidence
 
 ![Pi-hole blocked domain query log](screenshots/pihole-query-log-blocked-domain.png)
 
-The query log shows test queries for `doubleclick.net` being blocked. This validates that client traffic is reaching Pi-hole and that blocklist enforcement is working.
-
-In the query log screenshot, the **Allow** and **Deny** buttons are action buttons provided by Pi-hole. They do not mean the displayed query was allowed or denied by that button. Instead, they give the administrator a quick way to manually allowlist or denylist a domain after reviewing the query. The blocked status indicator on the query row is the evidence that the `doubleclick.net` test query was blocked.
+The query log shows `doubleclick.net` blocked by Pi-hole. The **Allow** and **Deny** controls are administrative action buttons; the row's blocked status is the evidence of enforcement.
 
 ---
 
 ## Unbound Configuration
 
-Unbound provides the recursive DNS layer of the project.
+Unbound provides the recursive-resolution layer:
 
-Key configuration choices:
+- Listens only on `127.0.0.1`.
+- Uses port `5335` to avoid conflicting with Pi-hole on port `53`.
+- Performs outbound recursion over IPv4 in this deployment.
+- Supports UDP and TCP DNS queries.
+- Enables DNSSEC hardening and validation.
+- Is not exposed to network clients; Pi-hole forwards to it locally.
 
-- Unbound listens only on localhost.
-- Unbound uses port `5335` so it does not conflict with Pi-hole on port 53.
-- IPv4 recursive resolution is enabled.
-- DNSSEC hardening is enabled.
-- Root-server reachability is validated before relying on Unbound.
-- Pi-hole forwards allowed queries to Unbound locally.
-- The sanitized configuration is available at [`configs/unbound/pi-hole.conf`](configs/unbound/pi-hole.conf).
+The sanitized configuration is published at [`configs/unbound/pi-hole.conf`](configs/unbound/pi-hole.conf).
 
 ### DNSSEC Validation Evidence
 
 ![Unbound DNSSEC validation tests](screenshots/unbound-dnssec-tests.png)
 
-The DNSSEC test validates both failure and success behavior:
+The validation covers both required outcomes:
 
-- A known broken DNSSEC domain returns `SERVFAIL`.
-- A valid DNSSEC domain returns `NOERROR` with the `ad` flag.
-
-This confirms Unbound is rejecting invalid DNSSEC responses and authenticating valid DNSSEC responses.
+- A deliberately broken signed domain returns `SERVFAIL`.
+- A valid signed domain returns `NOERROR` with the authenticated-data (`ad`) flag.
 
 ---
 
 ## IPv4 and IPv6 DNS Design
 
-The DNS server supports both IPv4 and IPv6 client DNS access.
-
-Design choices:
-
 - IPv4 clients receive the Pi-hole IPv4 DNS address from the router.
 - IPv6 clients receive a stable local IPv6 DNS address for Pi-hole.
-- The stable IPv6 DNS address is added automatically at boot using a small systemd service.
-- Public or ISP-provided IPv6 DNS servers are not used as secondary DNS servers, preventing Pi-hole bypass.
-- The reusable helper script, systemd unit, and example settings are included in the repository.
+- A systemd oneshot service restores that address during boot.
+- External or ISP-provided IPv6 DNS resolvers are not configured as client fallbacks.
+- Unbound can use IPv4 for outbound recursion while Pi-hole still accepts client DNS queries over IPv6.
 
 ### Windows Client DNS Validation
 
 ![Windows DNS client settings](screenshots/windows-dns-client-settings.png)
 
-The Windows client confirms that both IPv4 and IPv6 DNS are pointing to the Pi-hole server.
+The active Windows interface shows the intended Pi-hole DNS server addresses for both IPv4 and IPv6.
 
 ---
 
 ## Troubleshooting: DNS Interception
 
-Before Unbound was installed, direct root-server tests returned unexpected recursion-available responses.
+Before Unbound was installed, a direct nonrecursive root-server query returned an unexpected recursion-available (`ra`) flag.
 
-Expected root-server behavior:
+Expected behavior:
 
 ```text
 flags: qr aa
 ```
 
-Unexpected behavior observed during troubleshooting:
+Unexpected behavior:
 
 ```text
 flags included ra
 ```
 
-The `ra` flag indicated that something was intercepting or proxying outbound DNS traffic. After testing from multiple systems, the issue was isolated to a router-level advanced security feature.
+Testing from multiple systems isolated the behavior to a router-level advanced security feature. After disabling that feature:
 
-Resolution:
-
-- Disabled the router advanced security DNS filtering feature.
-- Retested direct root-server queries.
-- Confirmed the response returned `aa` and no longer showed `ra`.
-- Confirmed the `version.bind` root-server test returned `ATLAS`.
-- Proceeded with Unbound installation only after direct root-server access was verified.
+- The captured root-server query returned the authoritative (`aa`) flag without `ra`.
+- The A-root `version.bind` identity query returned `ATLAS`.
+- Unbound installation proceeded only after direct root-server access was confirmed.
 
 ### Root-Server Test Evidence
 
 ![Root-server authoritative response test](screenshots/root-server-test.png)
 
-The final root-server test shows an authoritative response and confirms DNS interception was no longer occurring.
-
 ---
 
 ## Health Check Script
 
-A custom [`dns-health`](scripts/dns-health) command was created for quick operational validation.
+The published [`dns-health`](scripts/dns-health) command checks:
 
-The published script checks:
-
-- Hostname and configured network interface.
-- Global IPv4 and IPv6 address availability.
+- Required command availability.
+- IPv4 and IPv6 interface addressing.
 - Presence of the configured stable Pi-hole IPv6 address.
-- Pi-hole and Unbound service status.
-- Pi-hole and Unbound DNS listeners.
-- Pi-hole CLI status.
-- Pi-hole normal DNS resolution.
-- Pi-hole blocklist behavior.
-- Unbound direct recursive resolution.
+- Pi-hole and Unbound service state.
+- DNS listeners on ports `53` and `5335`.
+- Normal Pi-hole and Unbound resolution.
+- Pi-hole blocking behavior.
 - Broken and valid DNSSEC behavior.
 - Direct root-server access over UDP and TCP.
 - Root-server identity response.
 - Recent Pi-hole forwarding to Unbound.
-- Final pass, warning, and failure counts with a nonzero exit code on critical failure.
+- Final pass, warning, and failure counts.
+
+Critical failures produce a nonzero exit code, allowing the command to be used by monitoring or automation tools.
 
 ### DNS Health Check Evidence
 
 ![DNS health check output](screenshots/dns-health-output.png)
 
-The final health-check output shows all checks passing after Pi-hole, Unbound, IPv4 DNS, IPv6 DNS, DNSSEC validation, root-server access, and Pi-hole-to-Unbound forwarding were configured.
+The screenshot records the original working deployment validation. The published script expands that implementation with explicit result handling and separate UDP and TCP root-server checks.
 
 ---
 
-## Validation Results
+## Validation Summary
 
-| Test | Result |
+| Validation area | Observed result |
 |---|---|
-| Pi-hole service running | Passed |
-| Unbound service running | Passed |
-| Pi-hole listening on port 53 | Passed |
-| Unbound listening on `127.0.0.1#5335` | Passed |
-| Pi-hole blocking enabled | Passed |
-| Test ad/tracker domain sinkholed | Passed |
-| Pi-hole forwards to Unbound | Passed |
-| Unbound resolves normal domains | Passed |
-| Broken DNSSEC domain returns `SERVFAIL` | Passed |
-| Valid DNSSEC domain returns `ad` flag | Passed |
-| Root-server response returns `aa` without `ra` | Passed |
-| Windows receives IPv4 Pi-hole DNS | Passed |
-| Windows receives IPv6 Pi-hole DNS | Passed |
-| DNS container remains unprivileged | Passed |
+| Pi-hole and Unbound services | Passed |
+| DNS listeners on ports `53` and `5335` | Passed |
+| Normal Pi-hole and Unbound resolution | Passed |
+| Test-domain blocking | Passed |
+| Pi-hole forwarding to `127.0.0.1#5335` | Passed |
+| Broken DNSSEC response rejection | Passed |
+| Valid DNSSEC response authentication | Passed |
+| Direct root-server access without unexpected recursion | Passed |
+| Windows IPv4 and IPv6 DNS assignment | Passed |
+| Stable IPv6 boot service | Passed |
+| Unprivileged LXC configuration | Verified |
+
+See [`VALIDATION.md`](VALIDATION.md) for tested software versions, commands, expected success conditions, observed results, and evidence mapping.
 
 ---
 
-## Security and Hardening Decisions
+## Security and Hardening
 
-Security-focused decisions made during the project:
-
-- Kept the DNS server inside an unprivileged LXC container.
+- Kept the DNS stack inside an unprivileged LXC container.
 - Avoided public exposure of the DNS service.
-- Avoided public DNS fallback servers that would bypass Pi-hole.
-- Removed router-level DNS interception before enabling recursive DNS.
-- Used Unbound locally instead of forwarding normal allowed queries to a public preset resolver.
-- Enabled DNSSEC validation through Unbound.
-- Disabled Pi-hole internal NTP synchronization inside the unprivileged container instead of weakening container isolation with extra time-setting permissions.
-- Used host-level time synchronization through Proxmox instead of granting the container additional clock-management privileges.
+- Avoided public DNS fallback servers that could bypass Pi-hole.
+- Bound Unbound only to localhost.
+- Removed router-level DNS interception before enabling recursion.
+- Used Unbound rather than forwarding normal permitted queries to a public preset resolver.
+- Enabled DNSSEC validation and tested both valid and bogus signed responses.
+- Left system time management with the Proxmox host instead of granting the container clock-setting privileges.
 
 ---
 
 ## Problems Solved
 
-### Router DNS Interception
-
-Problem:
-
-- Root-server tests returned recursion-available responses instead of direct authoritative responses.
-
-Solution:
-
-- Identified a router advanced security feature as the likely interception source.
-- Disabled the feature.
-- Confirmed direct authoritative root-server responses before installing Unbound.
-
-### IPv6 DNS Bypass Risk
-
-Problem:
-
-- Client devices received IPv4 Pi-hole DNS but still had ISP/router IPv6 DNS servers.
-
-Solution:
-
-- Added a stable local IPv6 address to the DNS container.
-- Configured the router to distribute Pi-hole as the IPv6 DNS server.
-- Confirmed Windows received both IPv4 and IPv6 Pi-hole DNS.
-
-### LXC NTP Permission Warning
-
-Problem:
-
-- Pi-hole diagnosis reported an NTP client permission error because the unprivileged container could not adjust system time.
-
-Solution:
-
-- Kept the container unprivileged.
-- Disabled Pi-hole internal NTP sync.
-- Relied on Proxmox host-level time synchronization.
-
-### Operational Validation
-
-Problem:
-
-- Manual DNS checks required multiple commands and were easy to forget.
-
-Solution:
-
-- Created a custom `dns-health` command to validate DNS health, DNSSEC, root-server access, blocking, and Pi-hole-to-Unbound forwarding.
+| Problem | Resolution |
+|---|---|
+| Root-server queries showed unexpected recursion availability | Disabled the router security feature intercepting DNS and retested direct root access |
+| IPv6-capable clients could receive an external DNS resolver | Added and distributed a stable local Pi-hole IPv6 address without an external DNS fallback |
+| Pi-hole reported an NTP permission warning in the unprivileged LXC | Disabled Pi-hole's internal NTP client and relied on Proxmox host time synchronization |
+| Manual validation required many separate commands | Consolidated checks into the reusable `dns-health` command |
+| Portfolio documentation lacked reproducible source files | Published sanitized scripts, configurations, installation notes, and validation procedures |
 
 ---
 
 ## Skills Demonstrated
 
-This project demonstrates practical experience with:
-
-- Proxmox VE administration.
-- Linux LXC container deployment.
+- Proxmox VE and unprivileged LXC administration.
 - Debian server administration.
-- Pi-hole DNS filtering.
-- Unbound recursive DNS resolution.
-- DNSSEC validation.
+- Pi-hole filtering and query analysis.
+- Unbound recursive DNS configuration.
+- DNSSEC validation and failure analysis.
 - IPv4 and IPv6 DNS client configuration.
-- Router DNS and DHCP troubleshooting.
-- DNS interception detection.
-- Linux systemd service creation.
-- Bash health-check scripting.
-- Network troubleshooting with `dig`, `nslookup`, `ss`, and Pi-hole logs.
-- Security-focused documentation and screenshot sanitization.
+- Router DHCP/DNS and interception troubleshooting.
+- Linux systemd service development.
+- Bash health-check scripting and exit-code handling.
+- Network troubleshooting with `dig`, `ss`, PowerShell, and Pi-hole logs.
+- Security-focused documentation and evidence sanitization.
 
 ---
 
 ## Future Improvements
 
-Possible future improvements:
-
 - Add a second Pi-hole instance for DNS redundancy.
-- Add automated monitoring or alerting for DNS service failures.
-- Add log rotation or long-term metrics export.
-- Add Grafana/Prometheus-style DNS dashboards.
-- Add a documented restore procedure from Proxmox backups.
-- Expand DNS logging into the existing SOC lab for detection practice.
-- Add documented allowlist/blocklist tuning examples.
+- Add automated service-failure alerts.
+- Add long-term metrics collection and dashboards.
+- Document restoration from Proxmox backups.
+- Forward selected DNS telemetry into the SOC lab for detection practice.
+- Document allowlist and blocklist tuning examples.
 
 ---
 
 ## Sanitization Notice
 
-This public version has been intentionally sanitized for GitHub portfolio use.
+This public portfolio version intentionally removes or generalizes:
 
-Removed or generalized information includes:
-
-- Internal IPv4 addresses.
-- Public IPv6 addresses.
-- Full local IPv6 prefixes.
+- Live internal IPv4 addresses.
+- Live public and local IPv6 addresses or prefixes.
 - Client names and device names.
-- Usernames.
+- Usernames and hostnames.
 - Host-specific identifiers.
-- Browser/session details.
-- Sensitive query log entries.
-- Router-specific private details.
+- Browser or session details.
+- Unrelated or sensitive query-log entries.
+- Router-specific private configuration details.
 
-The purpose of this document is to demonstrate DNS filtering, recursive DNS design, DNSSEC validation, IPv4/IPv6 DNS configuration, troubleshooting, and operational validation without exposing the live home network.
+Documentation-only address ranges and fictional example values may appear where needed to demonstrate configuration structure without exposing the live home network.
