@@ -273,7 +273,7 @@ Critical failures produce a nonzero exit code, allowing the command to be used b
 
 ![DNS health check output](screenshots/dns-health-output.png)
 
-The screenshot records the original working deployment validation. The published script expands that implementation with explicit result handling and separate UDP and TCP root-server checks.
+The screenshot records the original working deployment validation. The published script expands that implementation with explicit pass, warning, and failure handling, positive-answer validation, configurable listener checks, expected A-root identity validation, and separate UDP and TCP root-server checks.
 
 ---
 
