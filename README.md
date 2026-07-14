@@ -187,7 +187,7 @@ Unbound provides the recursive-resolution layer:
 - Performs outbound recursion over IPv4 in this deployment.
 - Supports UDP and TCP DNS queries.
 - Enables DNSSEC hardening and validation.
-- Is reachable only through local Pi-hole forwarding.
+- Is not exposed to network clients; Pi-hole forwards to it locally.
 
 The sanitized configuration is published at [`configs/unbound/pi-hole.conf`](configs/unbound/pi-hole.conf).
 
@@ -236,8 +236,7 @@ flags included ra
 
 Testing from multiple systems isolated the behavior to a router-level advanced security feature. After disabling that feature:
 
-- Direct root-server queries returned the authoritative (`aa`) flag without `ra`.
-- The captured direct root-server query returned the expected authoritative response.
+- The captured root-server query returned the authoritative (`aa`) flag without `ra`.
 - The A-root `version.bind` identity query returned `ATLAS`.
 - Unbound installation proceeded only after direct root-server access was confirmed.
 
