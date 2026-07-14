@@ -25,18 +25,26 @@ Additional deployment checks confirmed that:
 
 Version information is included so reviewers can distinguish the tested deployment from later software behavior, configuration formats, or defaults.
 
-## Validation Methodology
+## Validation Scope
 
 Validation was performed from two locations:
 
-1. **DNS LXC:** service state, listening sockets, local Pi-hole resolution, direct Unbound resolution, DNSSEC, root-server reachability, and forwarding behavior.
+1. **DNS LXC:** service state, listening sockets, local Pi-hole resolution, direct Unbound resolution, DNSSEC, direct root-server reachability, and forwarding behavior.
 2. **Windows client:** IPv4 and IPv6 DNS assignment and client access to Pi-hole.
 
-The published [`dns-health`](scripts/dns-health) script automates most server-side checks and returns a nonzero exit code when a critical validation fails.
+The original working-deployment evidence predates the expanded public [`dns-health`](scripts/dns-health) script. The published script was sanitized and passed Bash syntax validation, but it was not rerun against the live DNS LXC after the additional result handling and TCP root-server test were added.
+
+## Status Definitions
+
+| Status | Meaning |
+|---|---|
+| Passed | Directly observed in the working deployment or captured evidence |
+| Verified | Confirmed as a configuration or platform property |
+| Added to published script | Implemented in the public script but not included in the original captured live run |
 
 ## Results
 
-| Validation | Command or method | Expected success condition | Observed result |
+| Validation | Command or method | Expected success condition | Status |
 |---|---|---|---|
 | Pi-hole service | `systemctl is-active pihole-FTL` | Service reports `active` | Passed |
 | Unbound service | `systemctl is-active unbound` | Service reports `active` | Passed |
@@ -49,12 +57,12 @@ The published [`dns-health`](scripts/dns-health) script automates most server-si
 | Broken DNSSEC rejection | `dig @127.0.0.1 -p 5335 fail01.dnssec.works A` | Response status is `SERVFAIL` | Passed |
 | Valid DNSSEC authentication | `dig +dnssec @127.0.0.1 -p 5335 dnssec.works A` | Response is `NOERROR` and includes the `ad` flag | Passed |
 | Root-server UDP access | `dig @198.41.0.4 . NS +norec` | Authoritative `aa` flag is present and `ra` is absent | Passed |
-| Root-server TCP access | `dig @198.41.0.4 . NS +norec +tcp` | Authoritative `aa` flag is present and `ra` is absent | Passed |
+| Root-server TCP access | `dig @198.41.0.4 . NS +norec +tcp` | Authoritative `aa` flag is present and `ra` is absent | Added to published script |
 | Root-server identity | `dig @198.41.0.4 version.bind TXT CH +norec +short` | A-root returns an identity value | Passed (`ATLAS`) |
 | Pi-hole forwarding to Unbound | Recent Pi-hole log inspection | Forwarding entries reference `127.0.0.1#5335` | Passed |
 | Stable IPv6 boot service | `systemctl is-enabled --quiet pihole-ipv6.service` and `systemctl is-active --quiet pihole-ipv6.service` | Service is enabled and active | Passed |
 | Windows client DNS assignment | `Get-DnsClientServerAddress` | Active client interface lists the intended Pi-hole IPv4 and IPv6 DNS addresses without an external DNS fallback | Passed |
-| Container isolation | Proxmox LXC configuration review | Container is configured as unprivileged | Passed |
+| Container isolation | Proxmox LXC configuration review | Container is configured as unprivileged | Verified |
 
 ## DNSSEC Interpretation
 
@@ -73,9 +81,9 @@ A direct nonrecursive query to a root server should return an authoritative resp
 flags: qr aa
 ```
 
-The response should not include the recursion-available (`ra`) flag. During troubleshooting, the unexpected presence of `ra` exposed router-level DNS interception. After the router feature was disabled, both UDP and TCP root-server tests returned the expected authoritative behavior.
+The response should not include the recursion-available (`ra`) flag. During troubleshooting, the unexpected presence of `ra` exposed router-level DNS interception. After the router feature was disabled, the captured UDP root-server test returned the expected authoritative behavior.
 
-The `version.bind` CHAOS-class query returned `ATLAS`, providing additional evidence that the query reached A-root directly.
+The `version.bind` CHAOS-class query returned `ATLAS`, providing additional evidence that the query reached A-root directly. A separate TCP test is included in the published health-check script and should be run during the next live deployment validation.
 
 ## IPv4 and IPv6 Scope
 
@@ -91,11 +99,11 @@ This design still prevents IPv6-capable clients from bypassing Pi-hole through a
 
 | Evidence | What it demonstrates |
 |---|---|
-| [`screenshots/dns-health-output.png`](screenshots/dns-health-output.png) | Working deployment health-check output |
+| [`screenshots/dns-health-output.png`](screenshots/dns-health-output.png) | Original working-deployment health-check output |
 | [`screenshots/unbound-dnssec-tests.png`](screenshots/unbound-dnssec-tests.png) | Broken DNSSEC rejection and valid DNSSEC authentication |
-| [`screenshots/root-server-test.png`](screenshots/root-server-test.png) | Direct authoritative root-server response |
+| [`screenshots/root-server-test.png`](screenshots/root-server-test.png) | Direct authoritative UDP root-server response |
 | [`screenshots/windows-dns-client-settings.png`](screenshots/windows-dns-client-settings.png) | Windows IPv4 and IPv6 DNS assignment |
 | [`screenshots/pihole-query-log-blocked-domain.png`](screenshots/pihole-query-log-blocked-domain.png) | Pi-hole blocking of the test domain |
 | [`screenshots/pihole-upstream-unbound.png`](screenshots/pihole-upstream-unbound.png) | Pi-hole forwarding allowed queries to local Unbound |
 
-The health-check screenshot records the original working deployment validation. The published script expands the checks with explicit pass, warning, and failure handling plus separate UDP and TCP root-server tests.
+The public script expands the original health check with explicit pass, warning, and failure handling, a nonzero critical-failure exit code, and separate UDP and TCP root-server checks.
