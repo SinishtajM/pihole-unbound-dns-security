@@ -7,6 +7,7 @@
 - [Evidence Included](#evidence-included)
 - [Final Architecture](#final-architecture)
 - [Core Components](#core-components)
+- [Technical Artifacts](#technical-artifacts)
 - [DNS Resolution Flow](#dns-resolution-flow)
 - [Pi-hole Configuration](#pi-hole-configuration)
 - [Unbound Configuration](#unbound-configuration)
@@ -68,21 +69,36 @@ Sensitive values such as internal IPs, public IPv6 addresses, full IPv6 prefixes
 ## Final Architecture
 
 ```mermaid
-graph TD
-    A[Home Network Clients] --> B[Router / DHCP]
-    B --> C[Pi-hole DNS LXC]
+flowchart TD
+    ROUTER[Router / DHCP]
+    CLIENTS[Home Network Clients]
 
-    C --> C1[Pi-hole FTL]
-    C1 --> C2[Blocklists and DNS Cache]
-    C1 --> D[Unbound Recursive Resolver]
+    ROUTER -. "Distributes Pi-hole IPv4 and IPv6 DNS addresses" .-> CLIENTS
+    CLIENTS -->|"DNS queries over IPv4 or IPv6<br/>UDP/TCP port 53"| PIHOLE
 
-    D --> E[Root DNS Servers]
-    D --> F[TLD DNS Servers]
-    D --> G[Authoritative DNS Servers]
+    subgraph PROXMOX[Proxmox VE Host]
+        subgraph LXC[Unprivileged Debian LXC]
+            PIHOLE[Pi-hole FTL<br/>Filtering, cache, and query logging]
+            LISTS[Blocklists and local DNS data]
+            UNBOUND[Unbound Recursive Resolver<br/>127.0.0.1:5335]
+            HEALTH[dns-health<br/>Operational validation]
+            IPV6[pihole-ipv6.service<br/>Stable client-facing IPv6]
 
-    H[Proxmox VE Host] --> C
-    C --> I[DNS Health Check Script]
+            PIHOLE --> LISTS
+            PIHOLE -->|Allowed queries| UNBOUND
+            HEALTH -. Validates .-> PIHOLE
+            HEALTH -. Validates .-> UNBOUND
+            IPV6 -. Assigns stable address .-> PIHOLE
+        end
+    end
+
+    UNBOUND --> ROOT[Root DNS Servers]
+    ROOT --> TLD[TLD DNS Servers]
+    TLD --> AUTH[Authoritative DNS Servers]
+    AUTH -. DNS response .-> UNBOUND
 ```
+
+The router distributes the Pi-hole IPv4 and IPv6 addresses through the network's client configuration. Client DNS traffic then goes directly to Pi-hole rather than being resolved by a router-based DNS proxy. Pi-hole handles filtering and caching before forwarding allowed queries locally to Unbound.
 
 ### Proxmox DNS LXC Overview
 
@@ -97,12 +113,30 @@ The DNS service runs in a small unprivileged LXC container. The container uses l
 | Component | Role |
 |---|---|
 | Proxmox VE | Hosts the DNS LXC container |
-| Debian LXC | Lightweight Linux container for the DNS stack |
-| Pi-hole | DNS filtering, blocklists, query logging, web dashboard |
+| Debian LXC | Lightweight, unprivileged Linux container for the DNS stack |
+| Pi-hole | DNS filtering, blocklists, query logging, caching, and web dashboard |
 | Unbound | Local recursive DNS resolver with DNSSEC validation |
-| Router DHCP/DNS settings | Distributes Pi-hole as the DNS server to clients |
+| Router DHCP/DNS settings | Distributes the Pi-hole IPv4 and IPv6 DNS addresses to clients |
 | Windows client | Used to validate IPv4 and IPv6 DNS assignment |
-| Custom `dns-health` command | Validates DNS service health and configuration |
+| [`dns-health`](scripts/dns-health) | Runs repeatable operational and security validation |
+| [`pihole-ipv6.service`](configs/systemd/pihole-ipv6.service) | Restores the stable client-facing IPv6 address at boot |
+
+---
+
+## Technical Artifacts
+
+The repository includes sanitized, parameterized versions of the custom scripts and configuration files used by the working deployment:
+
+| Artifact | Purpose |
+|---|---|
+| [`scripts/dns-health`](scripts/dns-health) | Validates services, listeners, normal resolution, blocking, DNSSEC, direct root-server access, and Pi-hole-to-Unbound forwarding |
+| [`scripts/add-pihole-ipv6.sh`](scripts/add-pihole-ipv6.sh) | Adds the configured stable IPv6 address to the Pi-hole interface |
+| [`configs/systemd/pihole-ipv6.service`](configs/systemd/pihole-ipv6.service) | Runs the stable-IPv6 helper during system startup |
+| [`configs/systemd/pihole-ipv6.default.example`](configs/systemd/pihole-ipv6.default.example) | Provides public-safe example settings for the IPv6 service |
+| [`configs/systemd/dns-health.default.example`](configs/systemd/dns-health.default.example) | Provides optional settings for the health-check command |
+| [`configs/unbound/pi-hole.conf`](configs/unbound/pi-hole.conf) | Contains the sanitized Unbound recursive-resolver configuration |
+
+See [Technical Artifacts](docs/technical-artifacts.md) for tested versions, installation paths, deployment commands, IPv6 design notes, and sanitization details.
 
 ---
 
@@ -111,16 +145,22 @@ The DNS service runs in a small unprivileged LXC container. The container uses l
 The final DNS flow is:
 
 ```text
+Router / DHCP
+  → distributes the Pi-hole IPv4 and IPv6 DNS addresses to clients
+
 Client device
-  → Pi-hole on port 53
-  → Pi-hole checks cache and blocklists
-  → Allowed queries forward to Unbound on 127.0.0.1#5335
-  → Unbound performs recursive DNS resolution
-  → Unbound validates DNSSEC where supported
-  → Response returns through Pi-hole to the client
+  → sends DNS queries directly to Pi-hole on port 53
+  → Pi-hole checks its cache, local data, and blocklists
+  → blocked queries are answered locally by Pi-hole
+  → allowed queries are forwarded to Unbound on 127.0.0.1#5335
+  → Unbound performs recursive resolution through the DNS hierarchy
+  → Unbound validates signed DNSSEC responses and rejects bogus responses
+  → the response returns through Pi-hole to the client
 ```
 
-This design keeps local DNS filtering and recursive DNS resolution on the same DNS server while avoiding public DNS upstream providers for normal allowed queries.
+This design keeps filtering and recursive resolution on the same DNS server while avoiding public upstream DNS providers for normal allowed queries.
+
+The deployment supports IPv6 clients even though Unbound uses IPv4 for its outbound recursive queries. Client-facing DNS transport and Unbound's outbound recursion transport are separate: clients can reach Pi-hole over IPv6, while Pi-hole forwards locally to Unbound over IPv4 loopback.
 
 ---
 
@@ -177,6 +217,7 @@ Key configuration choices:
 - DNSSEC hardening is enabled.
 - Root-server reachability is validated before relying on Unbound.
 - Pi-hole forwards allowed queries to Unbound locally.
+- The sanitized configuration is available at [`configs/unbound/pi-hole.conf`](configs/unbound/pi-hole.conf).
 
 ### DNSSEC Validation Evidence
 
@@ -201,6 +242,7 @@ Design choices:
 - IPv6 clients receive a stable local IPv6 DNS address for Pi-hole.
 - The stable IPv6 DNS address is added automatically at boot using a small systemd service.
 - Public or ISP-provided IPv6 DNS servers are not used as secondary DNS servers, preventing Pi-hole bypass.
+- The reusable helper script, systemd unit, and example settings are included in the repository.
 
 ### Windows Client DNS Validation
 
@@ -246,23 +288,24 @@ The final root-server test shows an authoritative response and confirms DNS inte
 
 ## Health Check Script
 
-A custom `dns-health` command was created for quick operational validation.
+A custom [`dns-health`](scripts/dns-health) command was created for quick operational validation.
 
-The script checks:
+The published script checks:
 
-- Hostname.
-- IPv4 and IPv6 addresses.
-- Pi-hole service status.
-- Unbound service status.
-- Listening DNS and web ports.
+- Hostname and configured network interface.
+- Global IPv4 and IPv6 address availability.
+- Presence of the configured stable Pi-hole IPv6 address.
+- Pi-hole and Unbound service status.
+- Pi-hole and Unbound DNS listeners.
 - Pi-hole CLI status.
 - Pi-hole normal DNS resolution.
 - Pi-hole blocklist behavior.
 - Unbound direct recursive resolution.
-- DNSSEC failure handling.
-- DNSSEC valid-domain authentication.
-- Direct root-server access.
-- Pi-hole forwarding to Unbound.
+- Broken and valid DNSSEC behavior.
+- Direct root-server access over UDP and TCP.
+- Root-server identity response.
+- Recent Pi-hole forwarding to Unbound.
+- Final pass, warning, and failure counts with a nonzero exit code on critical failure.
 
 ### DNS Health Check Evidence
 
