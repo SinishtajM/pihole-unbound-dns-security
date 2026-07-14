@@ -32,7 +32,7 @@ Validation was performed from two locations:
 1. **DNS LXC:** service state, listening sockets, local Pi-hole resolution, direct Unbound resolution, DNSSEC, direct root-server reachability, and forwarding behavior.
 2. **Windows client:** IPv4 and IPv6 DNS assignment and client access to Pi-hole.
 
-The original working-deployment evidence predates the expanded public [`dns-health`](scripts/dns-health) script. The published script was sanitized and passed Bash syntax validation, but it was not rerun against the live DNS LXC after the additional result handling and TCP root-server test were added.
+The original working-deployment evidence predates the expanded public [`dns-health`](scripts/dns-health) script. The published script was sanitized and passed Bash syntax validation, but it was not rerun against the live DNS LXC after explicit result handling, positive-answer validation, configurable listener checks, exact A-root identity validation, and the TCP root-server test were added.
 
 ## Status Definitions
 
@@ -51,14 +51,14 @@ The original working-deployment evidence predates the expanded public [`dns-heal
 | Pi-hole DNS listener | `ss -H -lntu` | DNS listener is present on port `53` | Passed |
 | Unbound local listener | `ss -H -lntu` | Listener is present on `127.0.0.1:5335` | Passed |
 | Unbound configuration | `unbound-checkconf` | Configuration contains no errors | Passed |
-| Pi-hole normal resolution | `dig @127.0.0.1 pi-hole.net A` | Response status is `NOERROR` | Passed |
+| Pi-hole normal resolution | `dig @127.0.0.1 pi-hole.net A` | Response status is `NOERROR` and the answer count is greater than zero | Passed |
 | Pi-hole blocking | `dig @127.0.0.1 doubleclick.net A` | Pi-hole returns a recognized blocking response such as `NXDOMAIN`, an empty answer, or `0.0.0.0` | Passed |
-| Unbound recursive resolution | `dig @127.0.0.1 -p 5335 pi-hole.net A` | Response status is `NOERROR` | Passed |
+| Unbound recursive resolution | `dig @127.0.0.1 -p 5335 pi-hole.net A` | Response status is `NOERROR` and the answer count is greater than zero | Passed |
 | Broken DNSSEC rejection | `dig @127.0.0.1 -p 5335 fail01.dnssec.works A` | Response status is `SERVFAIL` | Passed |
-| Valid DNSSEC authentication | `dig +dnssec @127.0.0.1 -p 5335 dnssec.works A` | Response is `NOERROR` and includes the `ad` flag | Passed |
+| Valid DNSSEC authentication | `dig +dnssec @127.0.0.1 -p 5335 dnssec.works A` | Response is `NOERROR`, includes the `ad` flag, and has a positive answer count | Passed |
 | Root-server UDP access | `dig @198.41.0.4 . NS +norec` | Authoritative `aa` flag is present and `ra` is absent | Passed |
 | Root-server TCP access | `dig @198.41.0.4 . NS +norec +tcp` | Authoritative `aa` flag is present and `ra` is absent | Added to published script |
-| Root-server identity | `dig @198.41.0.4 version.bind TXT CH +norec +short` | A-root returns an identity value | Passed (`ATLAS`) |
+| Root-server identity | `dig @198.41.0.4 version.bind TXT CH +norec +short` | Response exactly matches the configured A-root identity, `ATLAS` | Passed (`ATLAS`) |
 | Pi-hole forwarding to Unbound | Recent Pi-hole log inspection | Forwarding entries reference `127.0.0.1#5335` | Passed |
 | Stable IPv6 boot service | `systemctl is-enabled --quiet pihole-ipv6.service` and `systemctl is-active --quiet pihole-ipv6.service` | Service is enabled and active | Passed |
 | Windows client DNS assignment | `Get-DnsClientServerAddress` | Active client interface lists the intended Pi-hole IPv4 and IPv6 DNS addresses without an external DNS fallback | Passed |
@@ -69,7 +69,7 @@ The original working-deployment evidence predates the expanded public [`dns-heal
 The two DNSSEC tests validate opposite outcomes:
 
 - A deliberately broken signed domain must fail with `SERVFAIL`.
-- A valid signed domain must resolve successfully and include the authenticated-data (`ad`) flag.
+- A valid signed domain must resolve with a positive answer and include the authenticated-data (`ad`) flag.
 
 Testing both outcomes is important. A normal successful lookup alone does not prove that invalid DNSSEC data is being rejected.
 
@@ -83,7 +83,7 @@ flags: qr aa
 
 The response should not include the recursion-available (`ra`) flag. During troubleshooting, the unexpected presence of `ra` exposed router-level DNS interception. After the router feature was disabled, the captured UDP root-server test returned the expected authoritative behavior.
 
-The `version.bind` CHAOS-class query returned `ATLAS`, providing additional evidence that the query reached A-root directly. A separate TCP test is included in the published health-check script and should be run during the next live deployment validation.
+The `version.bind` CHAOS-class query returned the expected A-root identity, `ATLAS`, providing additional evidence that the query reached A-root directly. The published health-check script requires an exact match to the configured identity. A separate TCP test is also included and should be run during the next live deployment validation.
 
 ## IPv4 and IPv6 Scope
 
