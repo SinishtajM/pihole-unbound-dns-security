@@ -2,6 +2,8 @@
 
 A portfolio case study documenting a network-wide DNS filtering and recursive-resolution stack built with **Pi-hole** and **Unbound** inside an unprivileged Debian LXC container on Proxmox VE.
 
+**Project status:** Completed and validated on July 13, 2026.
+
 ## Table of Contents
 
 - [Project Overview](#project-overview)
@@ -20,6 +22,8 @@ A portfolio case study documenting a network-wide DNS filtering and recursive-re
 - [Problems Solved](#problems-solved)
 - [Skills Demonstrated](#skills-demonstrated)
 - [Future Improvements](#future-improvements)
+- [Authoritative References](#authoritative-references)
+- [License](#license)
 - [Sanitization Notice](#sanitization-notice)
 
 ---
@@ -342,6 +346,22 @@ See [`VALIDATION.md`](VALIDATION.md) for tested software versions, commands, exp
 - Document restoration from Proxmox backups.
 - Forward selected DNS telemetry into the SOC lab for detection practice.
 - Document allowlist and blocklist tuning examples.
+
+---
+
+## Authoritative References
+
+- [Pi-hole: Unbound recursive DNS guide](https://docs.pi-hole.net/guides/dns/unbound/) — local resolver configuration, DNSSEC validation, root-server reachability tests, and Pi-hole upstream configuration.
+- [NLnet Labs: `unbound.conf` reference](https://unbound.docs.nlnetlabs.nl/en/latest/manpages/unbound.conf.html) — authoritative reference for Unbound server options.
+- [Proxmox VE: Linux Container documentation](https://pve.proxmox.com/pve-docs/chapter-pct.html) — container architecture, configuration, and management.
+- [systemd: `systemd.service` documentation](https://www.freedesktop.org/software/systemd/man/latest/systemd.service.html) — service-unit behavior used by the stable-IPv6 helper.
+- [Microsoft: `Get-DnsClientServerAddress`](https://learn.microsoft.com/en-us/powershell/module/dnsclient/get-dnsclientserveraddress) — Windows client DNS-server validation.
+
+---
+
+## License
+
+This project is licensed under the [MIT License](LICENSE).
 
 ---
 
