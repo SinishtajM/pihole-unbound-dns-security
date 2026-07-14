@@ -2,6 +2,8 @@
 
 This directory contains sanitized, parameterized versions of the custom files used in the working Pi-hole and Unbound deployment.
 
+For the complete tested-version inventory, validation commands, expected outcomes, and evidence mapping, see the [Tested Environment and Validation Report](../VALIDATION.md).
+
 ## Tested environment
 
 | Component | Tested version |
@@ -19,12 +21,13 @@ The live Unbound configuration passed `unbound-checkconf` with no errors. The st
 
 | File | Purpose |
 |---|---|
-| `scripts/dns-health` | Runs repeatable Pi-hole, Unbound, DNSSEC, blocking, IPv4/IPv6, and root-server checks |
-| `scripts/add-pihole-ipv6.sh` | Adds a stable IPv6 address to the Pi-hole interface |
-| `configs/systemd/pihole-ipv6.service` | Runs the IPv6 helper during boot |
-| `configs/systemd/pihole-ipv6.default.example` | Example environment file for the stable IPv6 service |
-| `configs/systemd/dns-health.default.example` | Optional configuration for the health-check script |
-| `configs/unbound/pi-hole.conf` | Sanitized Unbound recursive-resolver configuration |
+| [`../VALIDATION.md`](../VALIDATION.md) | Documents tested versions, commands, expected results, observed results, and supporting evidence |
+| [`scripts/dns-health`](../scripts/dns-health) | Runs repeatable Pi-hole, Unbound, DNSSEC, blocking, IPv4/IPv6, and root-server checks |
+| [`scripts/add-pihole-ipv6.sh`](../scripts/add-pihole-ipv6.sh) | Adds a stable IPv6 address to the Pi-hole interface |
+| [`configs/systemd/pihole-ipv6.service`](../configs/systemd/pihole-ipv6.service) | Runs the IPv6 helper during boot |
+| [`configs/systemd/pihole-ipv6.default.example`](../configs/systemd/pihole-ipv6.default.example) | Example environment file for the stable IPv6 service |
+| [`configs/systemd/dns-health.default.example`](../configs/systemd/dns-health.default.example) | Optional configuration for the health-check script |
+| [`configs/unbound/pi-hole.conf`](../configs/unbound/pi-hole.conf) | Sanitized Unbound recursive-resolver configuration |
 
 ## Installation paths
 
