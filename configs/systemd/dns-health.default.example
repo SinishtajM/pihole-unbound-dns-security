@@ -1,0 +1,12 @@
+# Optional settings for /usr/local/bin/dns-health.
+DNS_INTERFACE=eth0
+PIHOLE_DNS=127.0.0.1
+
+# Example ULA only. Replace with the stable Pi-hole IPv6 address, without /64.
+PIHOLE_IPV6=fd12:3456:789a:1::53
+
+UNBOUND_HOST=127.0.0.1
+UNBOUND_PORT=5335
+NORMAL_TEST_DOMAIN=pi-hole.net
+BLOCK_TEST_DOMAIN=doubleclick.net
+ROOT_SERVER=198.41.0.4
