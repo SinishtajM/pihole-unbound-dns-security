@@ -2,7 +2,7 @@
 
 A portfolio case study documenting a network-wide DNS filtering and recursive-resolution stack built with **Pi-hole** and **Unbound** inside an unprivileged Debian LXC container on Proxmox VE.
 
-**Project status:** Completed and validated on July 13, 2026.
+**Deployment status:** Completed and validated on July 13, 2026.
 
 ## Table of Contents
 
@@ -263,7 +263,7 @@ The published [`dns-health`](scripts/dns-health) command checks:
 - Pi-hole blocking behavior.
 - Broken and valid DNSSEC behavior.
 - Direct root-server access over UDP and TCP.
-- Root-server identity response.
+- Expected A-root identity response.
 - Recent Pi-hole forwarding to Unbound.
 - Final pass, warning, and failure counts.
 
@@ -372,7 +372,7 @@ This public portfolio version intentionally removes or generalizes:
 - Live internal IPv4 addresses.
 - Live public and local IPv6 addresses or prefixes.
 - Client names and device names.
-- Usernames and hostnames.
+- Live system usernames and identifying hostnames.
 - Host-specific identifiers.
 - Browser or session details.
 - Unrelated or sensitive query-log entries.

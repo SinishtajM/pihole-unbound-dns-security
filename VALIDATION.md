@@ -106,4 +106,4 @@ This design still prevents IPv6-capable clients from bypassing Pi-hole through a
 | [`screenshots/pihole-query-log-blocked-domain.png`](screenshots/pihole-query-log-blocked-domain.png) | Pi-hole blocking of the test domain |
 | [`screenshots/pihole-upstream-unbound.png`](screenshots/pihole-upstream-unbound.png) | Pi-hole forwarding allowed queries to local Unbound |
 
-The public script expands the original health check with explicit pass, warning, and failure handling, a nonzero critical-failure exit code, and separate UDP and TCP root-server checks.
+The public script expands the original health check with explicit pass, warning, and failure handling, a nonzero critical-failure exit code, positive-answer validation, configurable listener checks, an expected A-root identity check, and separate UDP and TCP root-server checks.
