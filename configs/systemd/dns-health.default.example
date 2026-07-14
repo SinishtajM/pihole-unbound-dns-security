@@ -10,3 +10,6 @@ UNBOUND_PORT=5335
 NORMAL_TEST_DOMAIN=pi-hole.net
 BLOCK_TEST_DOMAIN=doubleclick.net
 ROOT_SERVER=198.41.0.4
+
+# Expected CHAOS-class identity returned by ROOT_SERVER. A-root returns ATLAS.
+ROOT_IDENTITY_EXPECTED=ATLAS

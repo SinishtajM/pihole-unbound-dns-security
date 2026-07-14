@@ -27,6 +27,7 @@ DNSSEC_VALID_DOMAIN="${DNSSEC_VALID_DOMAIN:-dnssec.works}"
 DNSSEC_BOGUS_DOMAIN_1="${DNSSEC_BOGUS_DOMAIN_1:-fail01.dnssec.works}"
 DNSSEC_BOGUS_DOMAIN_2="${DNSSEC_BOGUS_DOMAIN_2:-dnssec-failed.org}"
 ROOT_SERVER="${ROOT_SERVER:-198.41.0.4}"
+ROOT_IDENTITY_EXPECTED="${ROOT_IDENTITY_EXPECTED:-ATLAS}"
 PIHOLE_LOG="${PIHOLE_LOG:-/var/log/pihole/pihole.log}"
 
 PASS_COUNT=0
@@ -94,7 +95,7 @@ printf '%s\n\n' '===================================='
 printf 'Hostname: %s\n' "$(hostname)"
 printf 'Interface: %s\n\n' "$DNS_INTERFACE"
 
-for command_name in dig ip ss systemctl; do
+for command_name in awk cut dig grep head hostname ip sed ss systemctl tail tr; do
     require_command "$command_name" || true
 done
 
@@ -141,10 +142,15 @@ else
     fail "No DNS listener was found on port 53"
 fi
 
-if grep -Eq '127\.0\.0\.1:5335[[:space:]]' <<<"$SOCKETS"; then
-    pass "Unbound is listening on 127.0.0.1:5335"
+UNBOUND_SOCKET="${UNBOUND_HOST}:${UNBOUND_PORT}"
+if [[ "$UNBOUND_HOST" == *:* ]]; then
+    UNBOUND_SOCKET="[${UNBOUND_HOST}]:${UNBOUND_PORT}"
+fi
+
+if awk -v endpoint="$UNBOUND_SOCKET" '$5 == endpoint { found = 1 } END { exit found ? 0 : 1 }' <<<"$SOCKETS"; then
+    pass "Unbound is listening on $UNBOUND_SOCKET"
 else
-    fail "Unbound was not found on 127.0.0.1:5335"
+    fail "Unbound was not found on $UNBOUND_SOCKET"
 fi
 printf '\n'
 
@@ -160,10 +166,11 @@ else
 fi
 
 PIHOLE_NORMAL_OUTPUT="$(dig @"$PIHOLE_DNS" "$NORMAL_TEST_DOMAIN" A +time=3 +tries=1 2>/dev/null || true)"
-if grep -q 'status: NOERROR' <<<"$PIHOLE_NORMAL_OUTPUT"; then
-    pass "Pi-hole resolves normal domains"
+if grep -q 'status: NOERROR' <<<"$PIHOLE_NORMAL_OUTPUT" \
+    && grep -Eq 'ANSWER: [1-9][0-9]*' <<<"$PIHOLE_NORMAL_OUTPUT"; then
+    pass "Pi-hole resolves normal domains with a positive answer"
 else
-    fail "Pi-hole failed to resolve $NORMAL_TEST_DOMAIN"
+    fail "Pi-hole failed to return a positive answer for $NORMAL_TEST_DOMAIN"
 fi
 
 BLOCK_OUTPUT="$(dig @"$PIHOLE_DNS" "$BLOCK_TEST_DOMAIN" A +time=3 +tries=1 2>/dev/null || true)"
@@ -183,10 +190,11 @@ printf '\n'
 
 printf '%s\n' 'Unbound checks:'
 UNBOUND_NORMAL_OUTPUT="$(dig @"$UNBOUND_HOST" -p "$UNBOUND_PORT" "$NORMAL_TEST_DOMAIN" A +time=5 +tries=1 2>/dev/null || true)"
-if grep -q 'status: NOERROR' <<<"$UNBOUND_NORMAL_OUTPUT"; then
-    pass "Unbound resolves normal domains"
+if grep -q 'status: NOERROR' <<<"$UNBOUND_NORMAL_OUTPUT" \
+    && grep -Eq 'ANSWER: [1-9][0-9]*' <<<"$UNBOUND_NORMAL_OUTPUT"; then
+    pass "Unbound resolves normal domains with a positive answer"
 else
-    fail "Unbound failed to resolve $NORMAL_TEST_DOMAIN"
+    fail "Unbound failed to return a positive answer for $NORMAL_TEST_DOMAIN"
 fi
 
 DNSSEC_FAIL_1="$(dig @"$UNBOUND_HOST" -p "$UNBOUND_PORT" "$DNSSEC_BOGUS_DOMAIN_1" A +time=5 +tries=1 2>/dev/null || true)"
@@ -200,10 +208,12 @@ else
 fi
 
 DNSSEC_VALID_OUTPUT="$(dig +dnssec @"$UNBOUND_HOST" -p "$UNBOUND_PORT" "$DNSSEC_VALID_DOMAIN" A +time=5 +tries=1 2>/dev/null || true)"
-if grep -Eq 'flags:.*(^|[[:space:]])ad([;[:space:]]|$)' <<<"$DNSSEC_VALID_OUTPUT"; then
-    pass "Unbound authenticated a valid DNSSEC response"
+if grep -q 'status: NOERROR' <<<"$DNSSEC_VALID_OUTPUT" \
+    && grep -Eq 'flags:.*(^|[[:space:]])ad([;[:space:]]|$)' <<<"$DNSSEC_VALID_OUTPUT" \
+    && grep -Eq 'ANSWER: [1-9][0-9]*' <<<"$DNSSEC_VALID_OUTPUT"; then
+    pass "Unbound authenticated a valid DNSSEC response with a positive answer"
 else
-    fail "Valid DNSSEC test did not return the AD flag"
+    fail "Valid DNSSEC test did not return NOERROR, the AD flag, and a positive answer"
 fi
 printf '\n'
 
@@ -212,10 +222,12 @@ check_root_response UDP
 check_root_response TCP
 
 ROOT_IDENTITY="$(dig @"$ROOT_SERVER" version.bind TXT CH +norec +short +time=5 +tries=1 2>/dev/null | tr -d '"' | head -n1 || true)"
-if [[ -n "$ROOT_IDENTITY" ]]; then
-    pass "Root-server identity query returned: $ROOT_IDENTITY"
+if [[ "$ROOT_IDENTITY" == "$ROOT_IDENTITY_EXPECTED" ]]; then
+    pass "Root-server identity matched the expected value: $ROOT_IDENTITY"
+elif [[ -n "$ROOT_IDENTITY" ]]; then
+    fail "Root-server identity was '$ROOT_IDENTITY'; expected '$ROOT_IDENTITY_EXPECTED'"
 else
-    warn "Root-server identity query returned no value"
+    fail "Root-server identity query returned no value; expected '$ROOT_IDENTITY_EXPECTED'"
 fi
 printf '\n'
 

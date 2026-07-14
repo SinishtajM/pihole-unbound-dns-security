@@ -76,4 +76,4 @@ The published Unbound configuration uses `do-ip6: no`. This setting controls Unb
 
 ## Sanitization
 
-The public files do not include the live IPv4 address, IPv6 prefix, hostname, interface identifiers, client names, or unrelated log data. The IPv6 values in the example environment files are documentation-only examples and must be replaced before use.
+The public files do not include the live IPv4 address, IPv6 prefix, identifying hostname, live interface identifiers, client names, or unrelated log data. The IPv6 values in the example environment files are documentation-only examples and must be replaced before use.
